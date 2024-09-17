@@ -1,41 +1,42 @@
-# WebP Generator Plugin for Figma
+# Unopinionated Compose Export Plugin for Figma
 
-<a href='https://ko-fi.com/webpgen' target='_blank'><img height='35' style='border:0px;height:46px;' src='https://az743702.vo.msecnd.net/cdn/kofi3.png?v=0' border='0' alt='Buy Me a Coffee at ko-fi.com' />
+![Cover](figma/cover_art.png)
 
-![Cover](figma/Cover_Art.png)
+**_Export your Design to Composables_**
 
-**_Export WebP files from Figma for Web or Android_**
+Quickly export a node hierarchy as composables with a customizable mapping for your design system.
 
-### Features
+This plugin isn't focused on generating pixel-perfect code that mirrors everything Figma offers.
+Instead, it's designed to save you from the repetitive task of constantly writing `Column`, `Row`, `Text`, ...,
+and renaming components or variables to match your design system in code.
 
--   Export any image as WebP
--   Supported resolutions are xxxhdpi, xxhdpi, xhdpi, hdpi, mdpi
--   Convenient folder structure to match your Android project
--   The uplifting feeling of having made the project a little better
+### Currently Supported Features
 
-Exports the selected figma node to the hierarchical matching android ressource folders:
+-   solid colors on texts, borders and backgrounds
+-   simple texts with one styling
+-   `Row`, `Column`, `Box`, `Text`, and `FlowRow` nodes
+-   box nodes as a fallback for icons or images
+-   baseline alignment of texts
+-   `weight(1f)` modifier on child nodes of `Row` or `Column`
+-   fixed sizing modifiers
+-   mapping of local variables (only paddings)
+-   mapping of text and color styles
+-   retain the original name of the nodes as a comment
 
-```
-drawable-mdpi \    1x
-    image.webp
-drawable-hdpi \    1.5x
-    image.webp
-drawable-xhdpi \   2x
-    image.webp
-drawable-xxhdpi \  3x
-    image.webp
-drawable-xxxhdpi \ 4x
-```
+### TODOs
 
-or for web:
+-   gradients for borders and backgrounds
+-   borders with patterns
+-   borders only on specific sides
+-   multi-text layouts (as annotated strings)
+-   min & max measurements
+-   support for more local variable types, including colors
+-   ...
 
-```
-image \
-    image_1x.webp
-    image_1_5x.webp
-    image_2x.webp
-    image_3x.webp
-    image_4x.webp
-```
+### Bugs or Feature Requests?
 
-Check out the plugin at [Figma](https://www.figma.com/community/plugin/1181873200384736932).
+You can either open an issue
+or write an email to [hey@letsprescribe.company](mailto:hey@letsprescribe.company).
+If you encounter any bug, please attach a `*.fig` file as a reference.
+
+Check out the plugin at [Figma](https://www.figma.com/community/plugin/1414536195807409133).

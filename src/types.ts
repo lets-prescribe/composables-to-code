@@ -1,3 +1,10 @@
-export type SelectedNode = { id: string; name: string };
+export type WindowSize = {
+    w: number;
+    h: number;
+};
 
-export type Settings = {};
+export type Settings = {
+    pluginWindowSize: WindowSize;
+    mappingConfig: string;
+    showMappedValues: boolean;
+};

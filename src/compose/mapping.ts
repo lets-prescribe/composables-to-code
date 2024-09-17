@@ -1,74 +1,43 @@
-import { ComposeNode, ComposeShape } from "./types";
-import { isReference, Reference, ValueType } from "../middleware";
+import { MutableMappingTable } from "../mapping";
+import { FontStyle, Reference, ValueType, getValue, isColor, isFontStyle } from "../middleware";
+import { rgbaToHexArgb } from "../utils";
 
-export class MappingTable {
-    padding: Map<string, string> = new Map<string, string>();
-    shape: Map<string, string> = new Map<string, string>();
-    color: Map<string, string> = new Map<string, string>();
-    text: Map<string, string> = new Map<string, string>();
-
-    private mappingKey<T = ValueType>(value: T | Reference<T>): string | undefined {
-        if (value && isReference(value)) {
-            return value.name;
-        } else {
-            return undefined;
-        }
+function createTextStyle(style: FontStyle): string {
+    let lineHeight;
+    if (style.lineHeight.unit === "PIXELS") {
+        lineHeight = `${style.lineHeight.value}.sp`;
+    } else if (style.lineHeight.unit === "PERCENT") {
+        lineHeight = `${style.lineHeight.value / 100.0}.em`;
+    } else {
+        lineHeight = undefined;
     }
+    const params = [
+        ["fontWeight", `FontWeight(${style.fontWeight})`],
+        ["fontSize", `${style.fontSize}.sp`],
+        ["lineHeight", lineHeight],
+    ]
+        .filter(([, b]) => b !== undefined)
+        .map(([a, b]) => `${a} = ${b}`)
+        .join(", ");
 
-    addReference<T = ValueType>(table: "padding" | "shape" | "color" | "text", value: T | Reference<T>) {
-        const key = this.mappingKey(value);
-        if (!key) return;
-        switch (table) {
-            case "padding":
-                this.padding.set(key, this.padding.get(key) ?? key);
-                break;
-            case "shape":
-                this.shape.set(key, this.padding.get(key) ?? key);
-                break;
-            case "color":
-                this.color.set(key, this.padding.get(key) ?? key);
-                break;
-            case "text":
-                this.text.set(key, this.padding.get(key) ?? key);
-                break;
-        }
-    }
+    return `TextStyle(${params})`;
 }
 
-function traverseComposeShape(table: MappingTable, shape: ComposeShape) {
-    table.addReference("shape", shape.radiusTopLeft);
-    table.addReference("shape", shape.radiusTopRight);
-    table.addReference("shape", shape.radiusBottomLeft);
-    table.addReference("shape", shape.radiusBottomRight);
-}
-
-export function traverseComposeNode(table: MappingTable, node: ComposeNode) {
-    node.modifiers.forEach((modifier) => {
-        switch (modifier.name) {
-            case "background":
-                table.addReference("color", modifier.color);
-                if (modifier.shape) {
-                    traverseComposeShape(table, modifier.shape);
-                }
-                break;
-            case "padding":
-                table.addReference("padding", modifier.paddingLeft);
-                table.addReference("padding", modifier.paddingTop);
-                table.addReference("padding", modifier.paddingRight);
-                table.addReference("padding", modifier.paddingBottom);
-                break;
+export class ComposeMutableMappingTable extends MutableMappingTable {
+    transform<T = ValueType>(value: NonNullable<T> | Reference<T>): string {
+        const v = getValue(value);
+        if (typeof v === "string") {
+            return `"${v}"`;
         }
-    });
-    switch (node.name) {
-        case "box":
-            break;
-        case "row":
-            break;
-        case "column":
-            break;
-        case "text":
-            table.addReference("text", node.textStyle);
-            break;
+        if (typeof v === "number") {
+            return v.toString() + ".dp";
+        }
+        if (isColor(v)) {
+            return `Color(0x${rgbaToHexArgb(v)})`;
+        }
+        if (isFontStyle(v)) {
+            return createTextStyle(v);
+        }
+        throw new Error(`Unsupported value: ${value}`);
     }
-    node.children.forEach((child) => traverseComposeNode(table, child));
 }

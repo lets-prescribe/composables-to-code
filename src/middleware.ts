@@ -7,8 +7,8 @@ export type Reference<T = ValueType> = {
     readonly value: T;
 };
 
-export function isReference(v: any | Reference): v is Reference {
-    return v["type"] === "reference";
+export function isReference<T = ValueType>(v: NonNullable<T> | Reference<T>): v is Reference<T> {
+    return (v as Reference)["type"] === "reference";
 }
 
 export function isFontStyle(v: any): v is FontStyle {
@@ -17,6 +17,14 @@ export function isFontStyle(v: any): v is FontStyle {
 
 export function isColor(v: any): v is Color {
     return (v as Color).type === "color";
+}
+
+export function getValue<T = ValueType>(v: NonNullable<T> | Reference<T>): T {
+    if (isReference(v)) {
+        return v.value;
+    } else {
+        return v;
+    }
 }
 
 function ref<T = ValueType>(id: string, name: string, value: T): Reference<T> {
@@ -40,10 +48,16 @@ export type NodeBackground = {
     readonly color: Color | Reference<Color>;
 };
 
+export type NodeBorder = {
+    readonly color: Color | Reference<Color>;
+    readonly width: number | Reference<number>;
+};
+
 export type NodeLayout = {
     readonly direction: "horizontal" | "vertical" | "none";
     readonly wrap: boolean;
-    readonly gap: number | Reference<number>;
+    readonly primaryAxisSpacing: number | Reference<number>;
+    readonly counterAxisSpacing?: number | Reference<number>;
     readonly paddingLeft: number | Reference<number>;
     readonly paddingTop: number | Reference<number>;
     readonly paddingRight: number | Reference<number>;
@@ -64,6 +78,10 @@ export type FontStyle = {
 export type NodeText = {
     readonly text: string;
     readonly style: FontStyle | Reference<FontStyle>;
+    readonly color?: Color | Reference<Color>;
+    readonly align: TextNode["textAlignHorizontal"];
+    readonly truncation: TextNode["textTruncation"];
+    readonly maxLines?: number;
 };
 
 function getColor(paint: Paint): Color | undefined {
@@ -77,38 +95,83 @@ function getColor(paint: Paint): Color | undefined {
 /**
  * Retrieve the background of this node. Only supports simple solid backgrounds.
  * Returns on all other cases undefined.
- * @param node the node with basic fill information.
  */
 export async function getBackground(node: MinimalFillsMixin): Promise<NodeBackground | undefined> {
     if (node.fillStyleId !== figma.mixed && node.fillStyleId !== "") {
         const style = await figma.getStyleByIdAsync(node.fillStyleId);
-        if (style?.type == "PAINT" && style.paints.length > 0) {
+        if (style?.type == "PAINT" && style.paints.length > 0 && style.paints[0].visible) {
             const color = getColor(style.paints[0]);
             if (color) {
                 return {
                     color: ref(style.id, style.name, color),
                 };
-            } else {
-                return undefined;
             }
         }
-    } else if (node.fills !== figma.mixed && node.fills.length > 0) {
-        if (node.fills.length > 0) {
-            const color = getColor(node.fills[0]);
+    } else if (node.fills !== figma.mixed && node.fills.length > 0 && node.fills[0].visible) {
+        const color = getColor(node.fills[0]);
+        if (color) {
+            return {
+                color: color,
+            };
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Retrieve the border of this node. Only supports simple solid borders.
+ * Returns on all other cases undefined.
+ */
+export async function getBorder(node: MinimalStrokesMixin): Promise<NodeBorder | undefined> {
+    if (node.strokeStyleId !== "") {
+        const style = await figma.getStyleByIdAsync(node.strokeStyleId);
+        if (
+            style?.type == "PAINT" &&
+            style.paints.length > 0 &&
+            style.paints[0].visible &&
+            node.strokeWeight !== figma.mixed
+        ) {
+            const color = getColor(style.paints[0]);
             if (color) {
                 return {
-                    color: color,
+                    color: ref(style.id, style.name, color),
+                    width: node.strokeWeight,
                 };
-            } else {
-                return undefined;
             }
         }
+    } else if (node.strokes.length > 0 && node.strokes[0].visible && node.strokeWeight !== figma.mixed) {
+        const color = getColor(node.strokes[0]);
+        if (color) {
+            return {
+                color: color,
+                width: node.strokeWeight,
+            };
+        }
+    }
+    return undefined;
+}
+
+async function tryResolveVariable<T = number | string>(
+    node: SceneNodeMixin,
+    alias: VariableAlias | undefined,
+    fallback: T,
+): Promise<T | Reference<T>> {
+    if (!alias) return fallback;
+    const variable = await figma.variables.getVariableByIdAsync(alias.id);
+    if (variable && (variable.resolvedType === "FLOAT" || variable.resolvedType === "STRING")) {
+        const modeId = node.resolvedVariableModes[variable.variableCollectionId];
+        return {
+            type: "reference",
+            id: variable.id,
+            name: variable.name,
+            value: variable.valuesByMode[modeId] as T,
+        };
     } else {
-        return undefined;
+        return fallback;
     }
 }
 
-export async function getLayout(node: AutoLayoutMixin): Promise<NodeLayout | undefined> {
+export async function getLayout(node: AutoLayoutMixin & SceneNodeMixin): Promise<NodeLayout | undefined> {
     let direction: NodeLayout["direction"];
     switch (node.layoutMode) {
         case "HORIZONTAL":
@@ -139,21 +202,38 @@ export async function getLayout(node: AutoLayoutMixin): Promise<NodeLayout | und
     return {
         direction,
         wrap,
-        gap: node.itemSpacing,
-        paddingBottom: node.paddingBottom,
-        paddingLeft: node.paddingLeft,
-        paddingRight: node.paddingRight,
-        paddingTop: node.paddingTop,
+        primaryAxisSpacing: await tryResolveVariable(node, node.boundVariables?.itemSpacing, node.itemSpacing),
+        counterAxisSpacing: node.counterAxisSpacing
+            ? await tryResolveVariable(node, node.boundVariables?.counterAxisSpacing, node.counterAxisSpacing)
+            : undefined,
+        paddingBottom: await tryResolveVariable(node, node.boundVariables?.paddingBottom, node.paddingBottom),
+        paddingLeft: await tryResolveVariable(node, node.boundVariables?.paddingLeft, node.paddingLeft),
+        paddingRight: await tryResolveVariable(node, node.boundVariables?.paddingRight, node.paddingRight),
+        paddingTop: await tryResolveVariable(node, node.boundVariables?.paddingTop, node.paddingTop),
     };
 }
 
 export async function getText(node: TextNode): Promise<NodeText | undefined> {
     if (node.textStyleId !== figma.mixed && node.textStyleId !== "" && node.fontWeight !== figma.mixed) {
         const style = await figma.getStyleByIdAsync(node.textStyleId);
-        if (style?.type == "TEXT") {
+        if (style?.type === "TEXT") {
+            const color = await getBackground(node);
             return {
                 text: node.characters,
-                style: ref(style.id, style.name, { ...style, fontWeight: node.fontWeight, type: "font" }),
+                style: ref(style.id, style.name, {
+                    type: "font",
+                    fontSize: style.fontSize,
+                    fontWeight: node.fontWeight,
+                    textDecoration: style.textDecoration,
+                    fontName: style.fontName,
+                    letterSpacing: style.letterSpacing,
+                    lineHeight: style.lineHeight,
+                    textCase: style.textCase,
+                }),
+                color: color?.color,
+                align: node.textAlignHorizontal,
+                truncation: node.textTruncation,
+                maxLines: node.maxLines ? node.maxLines : undefined,
             };
         } else {
             return undefined;
@@ -167,6 +247,7 @@ export async function getText(node: TextNode): Promise<NodeText | undefined> {
         node.lineHeight !== figma.mixed &&
         node.textCase !== figma.mixed
     ) {
+        const color = await getBackground(node);
         return {
             text: node.characters,
             style: {
@@ -179,6 +260,10 @@ export async function getText(node: TextNode): Promise<NodeText | undefined> {
                 lineHeight: node.lineHeight,
                 textCase: node.textCase,
             },
+            color: color?.color,
+            align: node.textAlignHorizontal,
+            truncation: node.textTruncation,
+            maxLines: node.maxLines ? node.maxLines : undefined,
         };
     }
 }

@@ -1,5 +1,9 @@
+import { wrapReferenceMapping } from "../mapping";
+import { Reference, ValueType, isReference } from "../middleware";
+import { ComposeMutableMappingTable } from "./mapping";
 import {
     ComposeColumnNode,
+    ComposeFlowRowNode,
     ComposeModifier,
     ComposeNode,
     ComposePaddingModifier,
@@ -7,44 +11,28 @@ import {
     ComposeShape,
     ComposeTextNode,
 } from "./types";
-import { isColor, isReference, Reference, ValueType } from "../middleware";
-import { rgbaToHexArgb } from "../utils";
 
 function pad(n: number): string {
     return " ".repeat(n);
 }
 
-function refValue<T = ValueType>(value: T | Reference<T> | undefined): string | undefined {
-    if (value === undefined) return undefined;
-    if (isReference(value)) {
-        if (typeof value.value === "string") {
-            return `"${value.value}"`;
-        }
-        if (typeof value.value === "number") {
-            return value.value.toString() + ".dp";
-        }
-        if (isColor(value.value)) {
-            return `Color("${rgbaToHexArgb(value.value)}")`;
-        }
-    } else {
-        if (typeof value === "string") {
-            return `"${value}"`;
-        }
-        if (typeof value === "number") {
-            return value.toString() + ".dp";
-        }
-        if (isColor(value)) {
-            return `Color("${rgbaToHexArgb(value)}")`;
-        }
-    }
-    return undefined;
-}
-
-export class Render {
+export class ComposeRender {
     private code: string = "";
     private indent: number = 0;
 
     private indentConfig: number = 4;
+
+    private constructor(private table: ComposeMutableMappingTable) {}
+
+    private transformValue<T = ValueType>(
+        table: "padding" | "shape" | "color" | "text",
+        value: T | Reference<T>,
+    ): string | undefined {
+        if (!value) return undefined;
+        const mappingValue = this.table.addReference(table, value);
+        if (!mappingValue) return undefined;
+        return wrapReferenceMapping(mappingValue);
+    }
 
     private getInlineFunction(name: string, ...params: [string | undefined, string | undefined][]): string {
         const p = (params.filter(([, v]) => v) as [string | undefined, string][])
@@ -57,14 +45,18 @@ export class Render {
             })
             .join(", ");
 
-        return `${name}(${p})`;
+        if (name[0] === name[0].toUpperCase()) {
+            return `${name}(${p})`;
+        } else {
+            return `${name}(${p})`;
+        }
     }
 
     private getShape(shape: ComposeShape): string {
-        const radiusBottomRight = refValue(shape?.radiusBottomRight);
-        const radiusBottomLeft = refValue(shape?.radiusBottomLeft);
-        const radiusTopRight = refValue(shape?.radiusTopRight);
-        const radiusTopLeft = refValue(shape?.radiusTopLeft);
+        const radiusBottomRight = this.transformValue("shape", shape.radiusBottomRight);
+        const radiusBottomLeft = this.transformValue("shape", shape.radiusBottomLeft);
+        const radiusTopRight = this.transformValue("shape", shape.radiusTopRight);
+        const radiusTopLeft = this.transformValue("shape", shape.radiusTopLeft);
         if (
             radiusBottomRight !== undefined &&
             radiusBottomRight === radiusBottomLeft &&
@@ -85,10 +77,10 @@ export class Render {
     }
 
     private getPadding(padding: ComposePaddingModifier): string {
-        const paddingLeft = refValue(padding?.paddingLeft);
-        const paddingTop = refValue(padding?.paddingTop);
-        const paddingRight = refValue(padding?.paddingRight);
-        const paddingBottom = refValue(padding?.paddingBottom);
+        const paddingLeft = this.transformValue("padding", padding.paddingLeft);
+        const paddingTop = this.transformValue("padding", padding.paddingTop);
+        const paddingRight = this.transformValue("padding", padding.paddingRight);
+        const paddingBottom = this.transformValue("padding", padding.paddingBottom);
         if (
             paddingLeft !== undefined &&
             paddingLeft === paddingTop &&
@@ -115,22 +107,38 @@ export class Render {
         const joinedModifiers = modifiers
             .map((modifier) => {
                 if (modifier.name === "weight") {
-                    return `weight(${modifier.weight})`;
+                    return `weight(${modifier.weight}f)`;
+                } else if (modifier.name === "fill_max_width") {
+                    return `fillMaxWidth()`;
                 } else if (modifier.name === "background") {
                     const shape = modifier.shape ? this.getShape(modifier.shape) : undefined;
                     return this.getInlineFunction(
                         "background",
-                        [undefined, refValue(modifier.color)],
+                        [undefined, this.transformValue("color", modifier.color)],
+                        [undefined, shape],
+                    );
+                } else if (modifier.name === "border") {
+                    const shape = modifier.shape ? this.getShape(modifier.shape) : "RectangleShape";
+                    return this.getInlineFunction(
+                        "border",
+                        [undefined, this.transformValue("shape", modifier.width)],
+                        [undefined, this.transformValue("color", modifier.color)],
                         [undefined, shape],
                     );
                 } else if (modifier.name === "padding") {
                     return this.getPadding(modifier);
                 } else if (modifier.name === "baseline") {
-                    return "alignByBaseline()";
+                    return `alignByBaseline()`;
+                } else if (modifier.name === "size") {
+                    return `size(${this.transformValue("shape", modifier.value)})`;
+                } else if (modifier.name === "width") {
+                    return `width(${this.transformValue("shape", modifier.value)})`;
+                } else if (modifier.name === "height") {
+                    return `height(${this.transformValue("shape", modifier.value)})`;
                 }
             })
-            .join(".");
-        this.addParams(false, ["modifier", `Modifier.${joinedModifiers}`]);
+            .join("\n.");
+        this.addParams(false, ["modifier", `Modifier\n.${joinedModifiers}`]);
     }
 
     private addRowParams(node: ComposeRowNode) {
@@ -144,7 +152,7 @@ export class Render {
         } else if (node.horizontalArrangement === "end") {
             arrangement = "Arrangement.End";
         } else {
-            const spacing = refValue(node.horizontalArrangement);
+            const spacing = this.transformValue("padding", node.horizontalArrangement);
             if (spacing) {
                 arrangement = `Arrangement.spacedBy(${spacing})`;
             }
@@ -154,16 +162,55 @@ export class Render {
         }
         let alignment: string | undefined;
         if (node.verticalAlignment === "top") {
-            alignment = "Alignment.Start";
+            alignment = "Alignment.Top";
         } else if (node.verticalAlignment === "bottom") {
-            alignment = "Alignment.End";
+            alignment = "Alignment.Bottom";
         } else if (node.verticalAlignment === "center") {
-            alignment = "Alignment.CenterHorizontally";
+            alignment = "Alignment.CenterVertically";
         } else if (node.verticalAlignment === "baseline") {
-            alignment = "Alignment.CenterHorizontally";
+            alignment = undefined;
         }
         if (alignment) {
             this.addParams(false, ["verticalAlignment", alignment]);
+        }
+    }
+
+    private addFlowRowParams(node: ComposeFlowRowNode) {
+        let horizontalArrangement: string | undefined;
+        if (node.horizontalArrangement === "space_between") {
+            horizontalArrangement = "Arrangement.SpaceBetween";
+        } else if (node.horizontalArrangement === "center") {
+            horizontalArrangement = "Arrangement.Center";
+        } else if (node.horizontalArrangement === "start") {
+            horizontalArrangement = "Arrangement.Start";
+        } else if (node.horizontalArrangement === "end") {
+            horizontalArrangement = "Arrangement.End";
+        } else {
+            const spacing = this.transformValue("padding", node.horizontalArrangement);
+            if (spacing) {
+                horizontalArrangement = `Arrangement.spacedBy(${spacing})`;
+            }
+        }
+        if (horizontalArrangement) {
+            this.addParams(false, ["horizontalArrangement", horizontalArrangement]);
+        }
+        let verticalArrangement: string | undefined;
+        if (node.verticalArrangement === "space_between") {
+            verticalArrangement = "Arrangement.SpaceBetween";
+        } else if (node.verticalArrangement === "center") {
+            verticalArrangement = "Arrangement.Center";
+        } else if (node.verticalArrangement === "top") {
+            verticalArrangement = "Arrangement.Top";
+        } else if (node.verticalArrangement === "bottom") {
+            verticalArrangement = "Arrangement.Bottom";
+        } else {
+            const spacing = this.transformValue("padding", node.verticalArrangement);
+            if (spacing) {
+                verticalArrangement = `Arrangement.spacedBy(${spacing})`;
+            }
+        }
+        if (verticalArrangement) {
+            this.addParams(false, ["verticalArrangement", verticalArrangement]);
         }
     }
 
@@ -178,7 +225,7 @@ export class Render {
         } else if (node.verticalArrangement === "bottom") {
             arrangement = "Arrangement.Bottom";
         } else {
-            const spacing = refValue(node.verticalArrangement);
+            const spacing = this.transformValue("padding", node.verticalArrangement);
             if (spacing) {
                 arrangement = `Arrangement.spacedBy(${spacing})`;
             }
@@ -201,26 +248,54 @@ export class Render {
 
     private addTextParams(node: ComposeTextNode) {
         if (isReference(node.textStyle)) {
-            this.addParams(false, ["style", node.textStyle.name]);
+            this.addParams(false, ["style", this.transformValue("text", node.textStyle)]);
         } else {
             const style = node.textStyle;
-            this.addOpenParam("style");
-            this.addFunction("TextStyle", `${style.fontName}`, false, () => {
-                this.addParams(
-                    false,
-                    ["fontWeight", `FontWeight(${style.fontWeight})`],
-                    ["fontSize", `${style.fontSize}.sp`],
-                    ["lineHeight", `${style.lineHeight}.sp`],
-                );
-            });
+            this.addParams(false, [
+                "style",
+                () => {
+                    this.addFunction("TextStyle", `${style.fontName.family} / ${style.fontName.style}`, false, () => {
+                        const lineHeight = style.lineHeight.unit === "PIXELS" ? style.lineHeight.value : undefined;
+                        this.addParams(
+                            false,
+                            ["fontWeight", `FontWeight(${style.fontWeight})`],
+                            ["fontSize", `${style.fontSize}.sp`],
+                            ["lineHeight", lineHeight ? `${lineHeight}.sp` : undefined],
+                        );
+                    });
+                },
+            ]);
         }
-        this.addParams(false, ["text", `"${node.text}"`]);
+        this.addParams(false, ["text", `"${node.text.replace(/\n/g, "\\n")}"`]);
+        this.addParams(false, ["color", this.transformValue("color", node.textColor)]);
+        console.log(node);
+        let alignment: string | undefined;
+        if (node.textAlign === "start") {
+            alignment = "TextAlign.Start";
+        } else if (node.textAlign === "end") {
+            alignment = "TextAlign.End";
+        } else if (node.textAlign === "justify") {
+            alignment = "TextAlign.Justify";
+        } else if (node.textAlign === "center") {
+            alignment = "TextAlign.Center";
+        }
+        this.addParams(false, ["textAlign", alignment]);
+        this.addParams(false, ["overflow", node.overflow === "ellipsis" ? "TextOverflow.Ellipsis" : undefined]);
+        this.addParams(false, ["maxLines", node.maxLines?.toString()]);
+    }
+
+    private truncate(name: string, maxLength: number): string {
+        if (name.length > maxLength) {
+            return name.substring(0, maxLength) + "...";
+        } else {
+            return name;
+        }
     }
 
     private addFunction(name: string, nodeName: string, inline: boolean, params: () => void) {
         const padding = inline ? "" : pad(this.indent);
         const lineEnding = inline ? "" : "\n";
-        this.code += `${padding}// ${nodeName}${lineEnding}`;
+        this.code += `${padding}// ${this.truncate(nodeName, 80)}${lineEnding}`;
         this.code += `${padding}${name}(${lineEnding}`;
         this.indent += inline ? 0 : this.indentConfig;
         params();
@@ -228,16 +303,23 @@ export class Render {
         this.code += `${padding})`;
     }
 
-    private addParams(inline: boolean, ...params: [string, string][]) {
+    private addParams(inline: boolean, ...params: [string, string | (() => void) | undefined][]) {
         const padding = inline ? "" : pad(this.indent);
         const lineEnding = inline ? "" : "\n";
         params.forEach(([k, v]) => {
-            this.code += `${padding}${k} = ${v},${lineEnding}`;
-        });
-    }
+            if (!v) return;
 
-    private addOpenParam(paramName: string) {
-        this.code += `${paramName} = `;
+            this.code += `${padding}${k} = `;
+            if (typeof v === "function") {
+                this.code += "\n";
+                this.indent += this.indentConfig;
+                v();
+                this.indent -= this.indentConfig;
+            } else {
+                this.code += v.replace(/\n/gm, () => "\n" + pad(this.indent + this.indentConfig));
+            }
+            this.code += `,${lineEnding}`;
+        });
     }
 
     private addBody(body: () => void) {
@@ -253,13 +335,30 @@ export class Render {
         this.code += "\n";
     }
 
-    render(node: ComposeNode) {
-        this.addFunction(node.name, node.nodeName, false, () => {
+    private addLineComment(comment: string) {
+        const padding = pad(this.indent);
+        this.code += `${padding}// ${comment}\n`;
+    }
+
+    private nameMapping: { [key in ComposeNode["name"]]: string } = {
+        row: "Row",
+        flowRow: "FlowRow",
+        column: "Column",
+        box: "Box",
+        text: "Text",
+    };
+
+    private process(node: ComposeNode) {
+        this.addFunction(this.nameMapping[node.name], node.nodeName, false, () => {
             this.addModifiers(node.modifiers);
             switch (node.name) {
                 case "box":
                     break;
                 case "row":
+                    this.addRowParams(node);
+                    break;
+                case "flowRow":
+                    this.addFlowRowParams(node);
                     break;
                 case "column":
                     this.addColumnParams(node);
@@ -272,16 +371,17 @@ export class Render {
         switch (node.name) {
             case "box":
             case "row":
+            case "flowRow":
             case "column":
-                if (node.children.length > 0) {
-                    this.addBody(() => {
+                this.addBody(() => {
+                    if (node.children.length > 0) {
                         for (const child of node.children) {
-                            this.render(child);
+                            this.process(child);
                         }
-                    });
-                } else {
-                    this.addNewline();
-                }
+                    } else {
+                        this.addLineComment("...");
+                    }
+                });
                 break;
             default:
                 this.addNewline();
@@ -289,7 +389,9 @@ export class Render {
         }
     }
 
-    getCode(): string {
-        return this.code;
+    static render(table: ComposeMutableMappingTable, node: ComposeNode): string {
+        const render = new ComposeRender(table);
+        render.process(node);
+        return render.code;
     }
 }

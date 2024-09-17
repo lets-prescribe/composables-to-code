@@ -11,13 +11,16 @@
     "dependencies": {
         "@create-figma-plugin/ui": "3.2.0",
         "@create-figma-plugin/utilities": "3.2.0",
-        "preact": "^10.17.0"
+        "ini": "5.0.0",
+        "preact": "10.23.2"
     },
     "devDependencies": {
         "@create-figma-plugin/build": "3.2.0",
         "@create-figma-plugin/tsconfig": "3.2.0",
         "@figma/eslint-plugin-figma-plugins": "^0.15.0",
+        "@trivago/prettier-plugin-sort-imports": "4.3.0",
         "@figma/plugin-typings": "1.99.0",
+        "@types/ini": "4.1.1",
         "@types/node": "22.5.2",
         "@typescript-eslint/eslint-plugin": "^8.3.0",
         "@typescript-eslint/parser": "8.3.0",
@@ -25,6 +28,7 @@
         "eslint-config-prettier": "9.1.0",
         "eslint-plugin-jest": "^28.8.2",
         "eslint-plugin-react": "^7.35.0",
+        "eslint-plugin-import": "2.29.1",
         "jszip": "^3.10.1",
         "patch-package": "^8.0.0",
         "prettier": "3.2.5",
@@ -35,10 +39,18 @@
             "figma",
             "dev"
         ],
+        "networkAccess": {
+            "allowedDomains": [
+                "none"
+            ]
+        },
+        "capabilities": [
+            "inspect"
+        ],
         "documentAccess": "dynamic-page",
         "containsWidget": false,
         "id": "1414536195807409133",
-        "name": "Code Exporter",
+        "name": "Composables to Code",
         "main": "src/main.ts",
         "ui": "src/ui.tsx"
     }

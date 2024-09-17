@@ -1,76 +1,216 @@
-.preview_stack {
-    height: 150px;
-    max-width: 256px;
-    position: relative;
+#main_grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-gap: 8px;
+    height: 100%;
+
+    padding: 8px;
 }
 
-.preview:nth-child(1) {
-    transform: translate(-50%, -50%);
-    z-index: 0;
+.code_preview {
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    height: 100%;
+    overflow: hidden;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 16px;
 }
 
-.preview:nth-child(2) {
-    transform: translate(-50%, -50%) rotate(-16deg);
-    z-index: 1;
+.code_preview .code_header {
+    display: flex;
+    grid-row: 1;
+    gap: 4px;
+    align-items: center;
+    border-bottom: 1px solid var(--figma-color-border);
+
+    padding: 8px;
 }
 
-.preview:nth-child(3) {
-    transform: translate(-50%, -50%) rotate(12deg);
-    z-index: 2;
+.code_header button {
+    display: flex;
+    color: var(--figma-color-text-brand);
+    padding: 7px 5px;
+    border-radius: 6px;
+    border: 1px solid transparent;
 }
 
-.preview {
+.code_header button.button_icon_danger {
+    display: flex;
+    line-height: 32px;
+    color: var(--figma-color-text-danger);
+    padding: 0;
+    border-radius: 6px;
+}
+
+.code_header button.button_icon_danger:hover:enabled {
+    color: var(--figma-color-icon-danger-hover);
+    background: var(--figma-color-bg-danger-tertiary);
+}
+
+.code_header button.button_icon_danger:active:enabled {
+    color: var(--figma-color-text-onbrand);
+    background: var(--figma-color-icon-danger-pressed);
+    border: 1px solid var(--figma-color-icon-danger-pressed);
+}
+
+.code_header button:active:enabled {
+    color: var(--figma-color-text-onbrand);
+    background: var(--figma-color-bg-brand);
+    border: 1px solid var(--figma-color-border-brand-strong);
+}
+
+.code_header button.button_primary {
+    border: 1px solid var(--figma-color-border-brand-strong);
+}
+
+.code_header button.button_primary:disabled {
+    border: 1px solid var(--figma-color-border-disabled-strong);
+}
+
+.code_header button:hover:enabled {
+    color: var(--figma-color-text-brand);
+    background: var(--figma-color-bg-selected);
+}
+
+.code_header button:active:enabled {
+    color: var(--figma-color-text-onbrand);
+    background: var(--figma-color-bg-brand);
+}
+
+.code_header button:disabled {
+    color: var(--figma-color-text-disabled);
+}
+
+.code_preview .code_container {
+    grid-row: 3;
+    display: flex;
+    flex-direction: row;
+    font-family: monospace;
+    line-height: 1.2rem;
+    overflow: scroll;
+    height: 100%;
+
+    user-select: text;
+    white-space: pre;
+
+    color: var(--figma-color-text);
+    scrollbar-color: var(--figma-color-bg-disabled-secondary) transparent;
+    scrollbar-width: thin;
+
+    padding: 0 4px 4px 4px;
+}
+
+.code_preview .code_line_number {
+    display: block;
+    width: min-content;
+    height: fit-content;
+    text-align: right;
+    color: var(--figma-color-text-secondary);
+    user-select: none;
+    padding-right: 6px;
+    border-right: 1px solid var(--figma-color-border);
+}
+
+.code_preview .code_content {
+    display: block;
+    width: 1fr;
+    padding-left: 6px;
+    outline: none;
+}
+
+.code_preview .code_variable {
+    display: inline-block;
+    user-select: text;
+    background: var(--figma-color-border-component);
+    border-radius: 4px;
+    padding: 0 2px;
+
+    cursor: pointer;
+
+    transition: transform 0.3s ease;
+}
+
+.code_preview .code_variable:hover {
+    transform: scale(1.1);
+}
+
+.code_preview .code_function {
+    user-select: text;
+    color: var(--figma-color-text-success);
+    font-weight: 600;
+}
+
+.code_preview .code_callable {
+    user-select: text;
+    color: var(--figma-color-text-component);
+    font-style: italic;
+}
+
+.code_preview .code_symbol {
+    user-select: text;
+    font-weight: 600;
+}
+
+.code_preview .code_parameter {
+    user-select: text;
+    color: var(--figma-color-text-brand);
+}
+
+.code_preview .code_chip {
+    display: inline-block;
+    user-select: text;
+    color: var(--figma-color-text-secondary);
+    background: transparent;
+    border-radius: 4px;
+    padding: 0 2px;
+}
+
+.code_preview .editable_code_chip {
+    display: inline-block;
+    user-select: text;
+    color: var(--figma-color-text-component);
+    background: var(--figma-color-border);
+    border-radius: 4px;
+    padding: 0 2px;
+    outline: none;
+    cursor: text;
+}
+
+.code_preview .editable_code_chip:empty {
+    background: var(--figma-color-border);
+    padding: 0 4px;
+}
+
+.code_preview span[variableHover] {
+    background: var(--figma-color-border-component);
+}
+
+/*.code_preview .code_chip:after {*/
+/*    content: '↺';*/
+/*    color: var(--figma-color-text-onbrand);*/
+/*    background: var(--figma-color-text-brand);*/
+/*    border-radius: 0 1em 1em 0;*/
+/*    width: 1em;*/
+/*    text-align: center;*/
+/*}*/
+
+.code_preview .code_empty {
+    grid-row: 3;
+    align-self: center;
+    justify-self: center;
+}
+
+.resize_handle {
+    display: block;
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    height: 150px;
-    width: 150px;
-    max-width: 256px;
-    object-fit: contain;
-    background: rgba(245, 245, 245, 0.6);
-    border-radius: 16px;
-    backdrop-filter: blur(2px);
-    border-width: 1px;
-    border-color: lightgrey;
-}
-
-.preview_no_selection {
-    border: dotted lightgrey;
-    border-radius: 16px;
-    height: 150px;
-    width: 150px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-}
-
-.naming {
-    display: flex;
-    gap: 8px;
-}
-
-.naming > div:nth-child(1) {
-    flex-basis: 70%;
-}
-
-.naming > div:nth-child(2) {
-    flex-basis: 30%;
-}
-
-.quality {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-.quality > div:nth-child(1) {
-    flex-basis: 70%;
-}
-
-.quality > div:nth-child(2) {
-    flex-basis: 30%;
+    bottom: 0;
+    right: 0;
+    width: 8px;
+    height: 8px;
+    margin: 2px;
+    border-radius: 8px 2px 2px;
+    background: var(--figma-color-bg-inverse);
+    cursor: se-resize;
 }
 
 #donate {

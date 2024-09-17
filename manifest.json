@@ -1,1 +1,11 @@
-{"api":"1.0.0","editorType":["figma","dev"],"id":"1414536195807409133","name":"Code Exporter","main":"build/main.js","ui":"build/ui.js","documentAccess":"dynamic-page","networkAccess":{"allowedDomains":["none"]},"capabilities":["inspect"]}
+{
+    "api": "1.0.0",
+    "editorType": ["figma", "dev"],
+    "id": "1414536195807409133",
+    "name": "Code Exporter",
+    "main": "build/main.js",
+    "ui": "build/ui.js",
+    "networkAccess": { "allowedDomains": ["none"] },
+    "capabilities": ["inspect"],
+    "documentAccess": "dynamic-page"
+}

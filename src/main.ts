@@ -1,34 +1,49 @@
-import { on, showUI } from "@create-figma-plugin/utilities";
-import { SaveSettings } from "./events";
-import * as ComposeRender from "./compose/render";
 import * as ComposeConverter from "./compose/converter";
-import { MappingTable, traverseComposeNode } from "./compose/mapping";
+import { Notify, Resize, SaveSettings, SelectionChanged } from "./events";
+import { WindowSize } from "./types";
+import { emit, on, showUI } from "@create-figma-plugin/utilities";
 
 export default function () {
-    on<SaveSettings>("SAVE_SETTINGS", async (settings) => {
+    on<Resize>("Resize", async (size: WindowSize) => {
+        figma.ui.resize(size.w, size.h);
+    });
+
+    on<SaveSettings>("SaveSettings", async (settings) => {
         await figma.clientStorage.setAsync("settings", settings);
+    });
+
+    on<Notify>("Notify", async (message) => {
+        figma.notify(message);
     });
 
     figma.on("selectionchange", async () => {
         if (figma.currentPage.selection.length > 0) {
             const processedNode = await ComposeConverter.processNode(figma.currentPage.selection[0]);
-            if (processedNode) {
-                console.log(processedNode);
-                const render = new ComposeRender.Render();
-                render.render(processedNode);
-                console.log(render.getCode());
-                const table = new MappingTable();
-                traverseComposeNode(table, processedNode);
-                console.log(table);
-            }
+            emit<SelectionChanged>("SelectionChanged", processedNode);
         }
     });
+
+    // figma.clientStorage.deleteAsync("settings")
+    //
+    // return;
 
     figma.clientStorage.getAsync("settings").then((settings: any | undefined) => {
         // never had the plugin before
         if (settings === undefined) {
             settings = {};
         }
-        showUI({ width: 320, height: 580 }, settings);
+        // V0
+        if (!("pluginWindowSize" in settings) || !("mappingConfig" in settings) || !("showMappedValues" in settings)) {
+            settings = {
+                pluginWindowSize: {
+                    w: 800,
+                    h: 600,
+                },
+                mappingConfig: "",
+                showMappedValues: true,
+            };
+        }
+        const windowSize = settings["pluginWindowSize"] as WindowSize;
+        showUI({ width: windowSize.w, height: windowSize.h }, settings);
     });
 }
